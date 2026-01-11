@@ -1,22 +1,32 @@
 #!/usr/bin/env python3
-"""CLI tool for batch processing video audio mixing."""
+"""CLI tool for batch processing video audio mixing.
 
+Usage:
+    uv run python batch.py <folder_path>
+    uv run python batch.py  # Opens folder picker (requires tkinter)
+"""
+
+import argparse
 import sys
-import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog
 
 from src.audio_processor import batch_mix_folder, find_video_files
 
 
-def select_folder(title: str = "Select Folder") -> Path | None:
-    """Open a native OS folder picker dialog."""
-    root = tk.Tk()
-    root.withdraw()
-    root.wm_attributes("-topmost", True)
-    folder_path = filedialog.askdirectory(title=title)
-    root.destroy()
-    return Path(folder_path) if folder_path else None
+def select_folder_gui(title: str = "Select Folder") -> Path | None:
+    """Open a native OS folder picker dialog. Returns None if tkinter unavailable."""
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+
+        root = tk.Tk()
+        root.withdraw()
+        root.wm_attributes("-topmost", True)
+        folder_path = filedialog.askdirectory(title=title)
+        root.destroy()
+        return Path(folder_path) if folder_path else None
+    except Exception:
+        return None
 
 
 def print_progress_bar(current: int, total: int, width: int = 40) -> None:
@@ -30,17 +40,40 @@ def print_progress_bar(current: int, total: int, width: int = 40) -> None:
 
 def main() -> int:
     """Main CLI entry point."""
+    parser = argparse.ArgumentParser(
+        description="Batch process videos to mix audio streams at default volumes.",
+        epilog="Example: uv run python batch.py /path/to/videos",
+    )
+    parser.add_argument(
+        "folder",
+        nargs="?",
+        type=Path,
+        help="Path to folder containing video files (opens picker if not provided)",
+    )
+    args = parser.parse_args()
+
     print("Audio Mixer - Batch Processing")
     print("=" * 40)
     print()
 
-    # Select source folder
-    print("Select the source folder containing video files...")
-    source_folder = select_folder("Select Video Folder")
+    # Get source folder from argument or GUI picker
+    if args.folder:
+        source_folder = args.folder
+        if not source_folder.exists():
+            print(f"Error: Folder does not exist: {source_folder}")
+            return 1
+        if not source_folder.is_dir():
+            print(f"Error: Path is not a directory: {source_folder}")
+            return 1
+    else:
+        print("Select the source folder containing video files...")
+        source_folder = select_folder_gui("Select Video Folder")
 
-    if not source_folder:
-        print("No folder selected. Exiting.")
-        return 1
+        if not source_folder:
+            print()
+            print("No folder selected or tkinter unavailable.")
+            print("Usage: uv run python batch.py <folder_path>")
+            return 1
 
     print(f"Source: {source_folder}")
     print()
