@@ -190,13 +190,17 @@ def render_batch_mode():
         "Audio streams will be mixed at 100% volume (default levels)."
     )
 
-    # Folder input
+    # Folder input with drag-and-drop hint
     source_folder = st.text_input(
         "Source Folder Path",
         value=st.session_state.batch_source_folder,
-        placeholder="/path/to/your/video/folder",
-        help="Enter the full path to the folder containing video files",
+        placeholder="Drag and drop a folder here, or paste the path",
+        help="Tip: You can drag a folder from your file explorer directly into this field",
     )
+
+    # Update session state
+    if source_folder != st.session_state.batch_source_folder:
+        st.session_state.batch_source_folder = source_folder
 
     # Validate folder
     source_path = Path(source_folder) if source_folder else None
@@ -207,7 +211,7 @@ def render_batch_mode():
         return
 
     if not source_folder:
-        st.info("Enter a folder path to get started.")
+        st.info("Enter a folder path to get started. You can drag and drop a folder into the text field above.")
         return
 
     # Show folder info
