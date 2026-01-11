@@ -1,5 +1,7 @@
 """FFmpeg audio/video processing operations."""
 
+from collections.abc import Generator
+from pathlib import Path
 from typing import Any
 
 import ffmpeg
@@ -129,3 +131,78 @@ def mix_audio_streams(
     except ffmpeg.Error as e:
         stderr = e.stderr.decode() if e.stderr else "Unknown error"
         raise RuntimeError(f"FFmpeg processing failed: {stderr}")
+
+
+def find_video_files(
+    folder: Path,
+    extensions: tuple[str, ...] = (".mp4", ".mkv"),
+) -> list[Path]:
+    """
+    Recursively find all video files in a folder.
+
+    Args:
+        folder: Path to the folder to search
+        extensions: Tuple of video file extensions to include
+
+    Returns:
+        Sorted list of video file paths
+    """
+    video_files = []
+    for ext in extensions:
+        video_files.extend(folder.rglob(f"*{ext}"))
+        video_files.extend(folder.rglob(f"*{ext.upper()}"))
+    return sorted(set(video_files))
+
+
+def batch_mix_folder(
+    source_folder: str,
+    output_folder: str,
+    video_extensions: tuple[str, ...] = (".mp4", ".mkv"),
+) -> Generator[tuple[str, str | None, str | None], None, None]:
+    """
+    Process all videos in a folder recursively, mixing audio at default volumes.
+
+    Args:
+        source_folder: Path to the source folder containing videos
+        output_folder: Path to the output folder for processed videos
+        video_extensions: Tuple of video file extensions to process
+
+    Yields:
+        Tuples of (input_path, output_path | None, error_message | None)
+        - On success: (input_path, output_path, None)
+        - On failure: (input_path, None, error_message)
+    """
+    source_path = Path(source_folder)
+    output_path = Path(output_folder)
+
+    video_files = find_video_files(source_path, video_extensions)
+
+    for video_file in video_files:
+        input_path_str = str(video_file)
+
+        try:
+            # Calculate relative path and create output path
+            relative_path = video_file.relative_to(source_path)
+            # Always output as .mp4 since we're encoding to AAC
+            output_file = output_path / relative_path.with_suffix(".mp4")
+
+            # Create parent directories if needed
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+
+            # Extract audio streams
+            audio_streams = extract_audio_streams(input_path_str)
+
+            if not audio_streams:
+                yield (input_path_str, None, "No audio streams found")
+                continue
+
+            # Create default volume levels (100% for all streams)
+            volume_levels = {stream.stream_index: 1.0 for stream in audio_streams}
+
+            # Mix audio
+            mix_audio_streams(input_path_str, str(output_file), volume_levels)
+
+            yield (input_path_str, str(output_file), None)
+
+        except Exception as e:
+            yield (input_path_str, None, str(e))
